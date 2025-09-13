@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// #define PLATFORM_WEB
 #if defined(PLATFORM_WEB)
 #include <emscripten.h>
 #endif
@@ -21,6 +20,8 @@ Camera2D camera = {0};
 const int screenWidth = 800;
 const int screenHeight = 450;
 float padding = 10.0f;
+bool playerTurn = true;
+bool enemyTurn = false;
 
 typedef struct {
   Rectangle base;
@@ -39,9 +40,9 @@ Enemy *enemy = NULL;
 //--
 // Local Functions Declaration
 //--
-static void UpdateDrawFrame(void);      // Update and draw one frame
-static void UpdatePlayerHealthBar();    // Update and draw player health bar
-static void UpdateEnemyHealthBar(void); // Update and draw player health bar
+static void UpdateDrawFrame(void);       // Update and draw one frame
+static void UpdatePlayerHealthBar(void); // Update and draw player health bar
+static void UpdateEnemyHealthBar(void);  // Update and draw player health bar
 
 //--
 // Main entry point
@@ -92,7 +93,7 @@ static void UpdateDrawFrame(void) {
   if (IsKeyPressed(KEY_SPACE)) {
     player->health -= 10;
   }
-  if (IsKeyPressed(KEY_ONE)) {
+  if (IsKeyPressed(KEY_Q)) {
     enemy->health -= 10;
   }
 
