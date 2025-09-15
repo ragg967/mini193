@@ -7,7 +7,7 @@
 #include "raylib.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <time.h>
 
 #if defined(PLATFORM_WEB)
 #include <emscripten.h>
@@ -21,12 +21,16 @@ const int screenWidth = 800;
 const int screenHeight = 450;
 float padding = 10.0f;
 bool playerTurn = true;
-bool enemyTurn = false;
+bool roundWon = false;
+int gameState = 0; // 0 = playing, 1 = win screen, 2 = game over
+int enemyMaxHealth = 150;
+int potions = 10;
 
 typedef struct {
   Rectangle base;
   Color color;
   float health, damage;
+  int score;
 } Player;
 Player *player = NULL;
 
@@ -42,7 +46,15 @@ Enemy *enemy = NULL;
 //--
 static void UpdateDrawFrame(void);       // Update and draw one frame
 static void UpdatePlayerHealthBar(void); // Update and draw player health bar
-static void UpdateEnemyHealthBar(void);  // Update and draw player health bar
+static void UpdateEnemyHealthBar(void);  // Update and draw enemy health bar
+static void ManageTurns(void);
+static void DrawGameOver(void);
+static void DrawGameWin(void);
+static void UpdatePlayerScore(void);
+static void InitEnemy();
+static void InitPlayer();
+static void NextEnemy(void);
+static void ControlText(void);
 
 //--
 // Main entry point
@@ -51,23 +63,10 @@ int main() {
 
   InitWindow(screenWidth, screenHeight, "mini193");
 
-  player = malloc(sizeof(Player));
-  if (player == NULL) {
-    printf("Error: failed to allocate memory for player");
-  }
-  player->base = (Rectangle){150, 200, 50, 75};
-  player->color = GREEN;
-  player->health = 100.0f;
-  player->damage = 10.0f;
+  SetRandomSeed(time(NULL));
 
-  enemy = malloc(sizeof(Player));
-  if (enemy == NULL) {
-    printf("Error: failed to allocate memory for enemy");
-  }
-  enemy->base = (Rectangle){550, 200, 50, 75};
-  enemy->color = RED;
-  enemy->health = 150.0f;
-  enemy->damage = 10.0f;
+  InitPlayer();
+  InitEnemy();
 
 #if defined(PLATFORM_WEB)
   emscripten_set_main_loop(UpdateDrawFrame, 60, 1);
@@ -83,6 +82,8 @@ int main() {
 
   // De-Init
   CloseWindow(); // Close window and OpenGL context
+  free(player);
+  free(enemy);
 
   return 0;
 }
@@ -90,11 +91,30 @@ int main() {
 // Update and draw game frame
 static void UpdateDrawFrame(void) {
   // Update
-  if (IsKeyPressed(KEY_SPACE)) {
-    player->health -= 10;
+  if (player->health > 0 && enemy->health > 0 && gameState == 0) {
+    ManageTurns();
   }
-  if (IsKeyPressed(KEY_Q)) {
-    enemy->health -= 10;
+
+  // Check for game state changes
+  if (player->health <= 0 && gameState == 0) {
+    gameState = 2; // Game over
+  }
+
+  if (enemy->health <= 0 && gameState == 0) {
+    roundWon = true;
+    gameState = 1; // Win screen
+    UpdatePlayerScore();
+  }
+
+  // Handle win screen input
+  if (gameState == 1 && IsKeyPressed(KEY_SPACE)) {
+    NextEnemy();
+    gameState = 0; // Back to playing
+  }
+
+  if (playerTurn && IsKeyPressed(KEY_TWO)) {
+    player->health += 20.0f;
+    potions -= 1;
   }
 
   // Draw
@@ -102,22 +122,26 @@ static void UpdateDrawFrame(void) {
 
   ClearBackground(SKYBLUE);
 
-  // floor
-  DrawRectangle(0, screenHeight / 2, screenWidth, screenHeight / 2, ORANGE);
-  // player
-  DrawRectangle(player->base.x, player->base.y, player->base.width,
-                player->base.height, player->color); // Player
-  UpdatePlayerHealthBar();
+  if (gameState == 2) {
+    DrawGameOver();
+  } else if (gameState == 1) {
+    DrawGameWin();
+  } else {
+    // Normal gameplay drawing
+    // floor
+    DrawRectangle(0, screenHeight / 2, screenWidth, screenHeight / 2, ORANGE);
+    // player
+    DrawRectangle(player->base.x, player->base.y, player->base.width,
+                  player->base.height, player->color); // Player
+    UpdatePlayerHealthBar();
 
-  // Enemy
-  DrawRectangle(enemy->base.x, enemy->base.y, enemy->base.width,
-                enemy->base.height, enemy->color);
-  UpdateEnemyHealthBar();
+    // Enemy
+    DrawRectangle(enemy->base.x, enemy->base.y, enemy->base.width,
+                  enemy->base.height, enemy->color);
+    UpdateEnemyHealthBar();
 
-  char text[] = "1 to Attack";
-  int fontSize = 20;
-  DrawText(text, fontSize - padding, player->base.y - fontSize - padding,
-           fontSize, RAYWHITE);
+    ControlText();
+  }
 
   DrawFPS(10, 10);
 
@@ -170,7 +194,7 @@ static void UpdatePlayerHealthBar(void) {
 
   // Draw health percentage text
   char healthText[16];
-  snprintf(healthText, sizeof(healthText), "%.0f%%", clampedHealth);
+  snprintf(healthText, sizeof(healthText), "%.0f", clampedHealth);
   int healthTextWidth = MeasureText(healthText, 10);
   DrawText(healthText, barX + (barWidth - healthTextWidth) / 2,
            barY + (barHeight - 10) / 2, 10, WHITE);
@@ -188,21 +212,20 @@ static void UpdateEnemyHealthBar(void) {
                 DARKGRAY);                               // Border
   DrawRectangle(barX, barY, barWidth, barHeight, BLACK); // Background
 
-  // Calculate how much of the bar to fill based on health (0-100)
-  // Ensure health is within valid range
+  // FIXED: Use enemy->health instead of enemyMaxHealth
   float clampedHealth = enemy->health;
   if (clampedHealth < 0.0f)
     clampedHealth = 0.0f;
-  if (clampedHealth > 100.0f)
-    clampedHealth = 100.0f;
+  if (clampedHealth > enemyMaxHealth)
+    clampedHealth = enemyMaxHealth;
 
-  int fillWidth = (int)((clampedHealth / 100.0f) * barWidth);
+  int fillWidth = (int)((clampedHealth / (float)enemyMaxHealth) * barWidth);
 
   // Choose bar color based on health level
   Color fillColor;
-  if (clampedHealth > 70.0f) {
+  if (clampedHealth > enemyMaxHealth / 1.5f) {
     fillColor = GREEN; // Healthy - green color
-  } else if (clampedHealth > 30.0f) {
+  } else if (clampedHealth > (float)enemyMaxHealth / 2.0f) {
     fillColor = YELLOW; // Moderate - yellow color
   } else {
     fillColor = RED; // Critical - red color
@@ -222,8 +245,155 @@ static void UpdateEnemyHealthBar(void) {
 
   // Draw health percentage text
   char healthText[16];
-  snprintf(healthText, sizeof(healthText), "%.0f%%", clampedHealth);
+  snprintf(healthText, sizeof(healthText), "%.0f", clampedHealth);
   int healthTextWidth = MeasureText(healthText, 10);
   DrawText(healthText, barX + (barWidth - healthTextWidth) / 2,
            barY + (barHeight - 10) / 2, 10, WHITE);
+}
+
+static void ManageTurns(void) {
+  if (playerTurn) {
+    if (IsKeyPressed(KEY_ONE)) { // Changed to IsKeyPressed for better control
+      int hitNumber = GetRandomValue(1, 2);
+      player->damage = GetRandomValue(10, 20);
+      if (hitNumber == 1) {
+        enemy->health -= player->damage;
+        playerTurn = false;
+      }
+    }
+  } else {
+    int hitNumber = GetRandomValue(1, 10);
+    enemy->damage = GetRandomValue(5, 10);
+    if (hitNumber == 1) {
+      player->health -= enemy->damage;
+      playerTurn = true;
+    }
+  }
+}
+
+static void DrawGameOver(void) {
+  ClearBackground(BLACK);
+
+  char *text = "GAME OVER";
+  int fontSize = 60;
+  int textSize = MeasureText(text, fontSize);
+  DrawText(text, (screenWidth / 2) - (textSize / 2),
+           (screenHeight / 2) - (fontSize / 2), fontSize, RED);
+
+  text = "Score: %d";
+  fontSize = 24;
+  textSize = MeasureText(text, fontSize);
+  DrawText(TextFormat(text, player->score), (screenWidth / 2) - (textSize / 2),
+           (screenHeight / 2) + 40, fontSize, GREEN);
+}
+
+static void DrawGameWin(void) {
+  ClearBackground(BLACK);
+
+  char *text = "FOE SLAIN";
+  int fontSize = 60;
+  int textSize = MeasureText(text, fontSize);
+  DrawText(text, (screenWidth / 2) - (textSize / 2),
+           (screenHeight / 2) - (fontSize / 2), fontSize, GREEN);
+
+  text = "Score: %d";
+  fontSize = 24;
+  textSize = MeasureText(text, fontSize);
+  DrawText(TextFormat(text, player->score), (screenWidth / 2) - (textSize / 2),
+           (screenHeight / 2) + 40, fontSize, GREEN);
+
+  text = "Press space for next enemy";
+  fontSize = 24;
+  textSize = MeasureText(text, fontSize);
+  DrawText(text, (screenWidth / 2) - (textSize / 2), (screenHeight / 2) + 80,
+           fontSize, GREEN);
+}
+
+static void UpdatePlayerScore(void) {
+  if (roundWon) {
+    player->score += GetRandomValue(1, 20);
+    roundWon = false;
+  }
+}
+
+static void InitPlayer() {
+  player = malloc(sizeof(Player));
+  if (player == NULL) {
+    printf("Error: failed to allocate memory for player");
+    exit(1); // Added exit on allocation failure
+  }
+  player->base = (Rectangle){150, 200, 50, 75};
+  player->color = GREEN;
+  player->health = 100.0f;
+  player->score = 0;
+}
+
+static void InitEnemy() {
+  enemy = malloc(sizeof(Enemy)); // FIXED: Use Enemy instead of Player
+  if (enemy == NULL) {
+    printf("Error: failed to allocate memory for enemy");
+    exit(1); // Added exit on allocation failure
+  }
+  enemy->base = (Rectangle){550, 200, 50, 75};
+  enemy->color = RED;
+  enemy->health = enemyMaxHealth;
+  enemy->damage = 10.0f;
+}
+
+static void NextEnemy(void) {
+  enemy->damage += GetRandomValue(2, 5);
+  enemyMaxHealth += GetRandomValue(10, 20);
+  enemy->health = enemyMaxHealth;
+  int enemyColor = GetRandomValue(1, 9);
+
+  // FIXED: Added break statements
+  switch (enemyColor) {
+  case 1:
+    enemy->color = RED;
+    break;
+  case 2:
+    enemy->color = BLACK;
+    break;
+  case 3:
+    enemy->color = WHITE;
+    break;
+  case 4:
+    enemy->color = GRAY;
+    break;
+  case 5:
+    enemy->color = PINK;
+    break;
+  case 6:
+    enemy->color = BEIGE;
+    break;
+  case 7:
+    enemy->color = PURPLE;
+    break;
+  case 8:
+    enemy->color = RAYWHITE;
+    break;
+  case 9:
+    enemy->color = YELLOW;
+    break;
+  }
+  roundWon = false;
+  playerTurn = true; // Reset turn to player
+}
+
+static void ControlText(void) {
+  char *text = "1 to Attack";
+  int fontSize = 20;
+  DrawText(text, fontSize - padding, player->base.y - fontSize - padding,
+           fontSize, RAYWHITE);
+
+  text = "Potions: %d";
+  fontSize = 20;
+  DrawText(TextFormat(text, potions), fontSize - padding,
+           player->base.y - (fontSize * 2) - padding, fontSize, RAYWHITE);
+
+  text = "2 to heal";
+  fontSize = 20;
+  DrawText(text, fontSize - padding,
+           player->base.y + ((float)fontSize / 2) - padding, fontSize,
+           RAYWHITE);
 }
