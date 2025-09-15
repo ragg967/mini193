@@ -1,10 +1,13 @@
-/*******************************************************************************************
+/**
  *
- * Game-jam game made for minijam 193 using raylib, aseprite,and code -OSS
+ * * Game-jam game made for minijam 193 using raylib, aseprite,and code -OSS
  *
- ********************************************************************************************/
+ *
+ */
 
-#include "raylib.h"
+#include <raylib.h>
+#define RAYGUI_IMPLEMENTATION
+#include <raygui.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -112,7 +115,7 @@ static void UpdateDrawFrame(void) {
     gameState = 0; // Back to playing
   }
 
-  if (playerTurn && IsKeyPressed(KEY_TWO)) {
+  if (playerTurn && IsKeyPressed(KEY_TWO) && potions > 0) {
     player->health += 20.0f;
     potions -= 1;
   }
