@@ -69,13 +69,6 @@ NOTES.md
 *.gch
 *.pch
 
-# CMake
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-*.cmake
-
 # Conan
 conanfile.txt
 conaninfo.txt
