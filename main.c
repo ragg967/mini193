@@ -47,6 +47,7 @@ Enemy *enemy = NULL;
 //--
 // Local Functions Declaration
 //--
+int main(void);
 static void UpdateDrawFrame(void);       // Update and draw one frame
 static void UpdatePlayerHealthBar(void); // Update and draw player health bar
 static void UpdateEnemyHealthBar(void);  // Update and draw enemy health bar
@@ -54,15 +55,15 @@ static void ManageTurns(void);
 static void DrawGameOver(void);
 static void DrawGameWin(void);
 static void UpdatePlayerScore(void);
-static void InitEnemy();
-static void InitPlayer();
+static void InitEnemy(void);
+static void InitPlayer(void);
 static void NextEnemy(void);
 static void ControlText(void);
 
 //--
 // Main entry point
 //--
-int main() {
+int main(void) {
 
   InitWindow(screenWidth, screenHeight, "mini193");
 
@@ -276,39 +277,29 @@ static void ManageTurns(void) {
 
 static void DrawGameOver(void) {
   ClearBackground(BLACK);
-
-  char *text = "GAME OVER";
   int fontSize = 60;
-  int textSize = MeasureText(text, fontSize);
-  DrawText(text, (screenWidth / 2) - (textSize / 2),
+
+  DrawText("GAME OVER", (screenWidth / 2) - (MeasureText("GAME OVER", fontSize) / 2),
            (screenHeight / 2) - (fontSize / 2), fontSize, RED);
 
-  text = "Score: %d";
   fontSize = 24;
-  textSize = MeasureText(text, fontSize);
-  DrawText(TextFormat(text, player->score), (screenWidth / 2) - (textSize / 2),
+  DrawText(TextFormat("Score: %d", player->score), (screenWidth / 2) - (MeasureText("Score: %d", fontSize) / 2),
            (screenHeight / 2) + 40, fontSize, GREEN);
 }
 
 static void DrawGameWin(void) {
   ClearBackground(BLACK);
-
-  char *text = "FOE SLAIN";
   int fontSize = 60;
-  int textSize = MeasureText(text, fontSize);
-  DrawText(text, (screenWidth / 2) - (textSize / 2),
+
+  DrawText("FOE SLAIN", (screenWidth / 2) - (MeasureText("FOE SLAIN", fontSize) / 2),
            (screenHeight / 2) - (fontSize / 2), fontSize, GREEN);
 
-  text = "Score: %d";
   fontSize = 24;
-  textSize = MeasureText(text, fontSize);
-  DrawText(TextFormat(text, player->score), (screenWidth / 2) - (textSize / 2),
+  DrawText(TextFormat("Score: %d", player->score), (screenWidth / 2) - (MeasureText("Score: %d", fontSize) / 2),
            (screenHeight / 2) + 40, fontSize, GREEN);
 
-  text = "Press space for next enemy";
-  fontSize = 24;
-  textSize = MeasureText(text, fontSize);
-  DrawText(text, (screenWidth / 2) - (textSize / 2), (screenHeight / 2) + 80,
+  // font size 24
+  DrawText("Press space for next enemy", (screenWidth / 2) - (MeasureText("Press space for next enemy", fontSize) / 2), (screenHeight / 2) + 80,
            fontSize, GREEN);
 }
 
@@ -319,7 +310,7 @@ static void UpdatePlayerScore(void) {
   }
 }
 
-static void InitPlayer() {
+static void InitPlayer(void) {
   player = malloc(sizeof(Player));
   if (player == NULL) {
     printf("Error: failed to allocate memory for player");
@@ -331,7 +322,7 @@ static void InitPlayer() {
   player->score = 0;
 }
 
-static void InitEnemy() {
+static void InitEnemy(void) {
   enemy = malloc(sizeof(Enemy)); // FIXED: Use Enemy instead of Player
   if (enemy == NULL) {
     printf("Error: failed to allocate memory for enemy");
@@ -384,19 +375,17 @@ static void NextEnemy(void) {
 }
 
 static void ControlText(void) {
-  char *text = "1 to Attack";
   int fontSize = 20;
-  DrawText(text, fontSize - padding, player->base.y - fontSize - padding,
+
+  DrawText("1 to Attack", fontSize - padding, player->base.y - fontSize - padding,
            fontSize, RAYWHITE);
 
-  text = "Potions: %d";
-  fontSize = 20;
-  DrawText(TextFormat(text, potions), fontSize - padding,
+  // font size 20
+  DrawText(TextFormat("Potions: %d", potions), fontSize - padding,
            player->base.y - (fontSize * 2) - padding, fontSize, RAYWHITE);
 
-  text = "2 to heal";
-  fontSize = 20;
-  DrawText(text, fontSize - padding,
+  // font size 20
+  DrawText("2 to heal", fontSize - padding,
            player->base.y + ((float)fontSize / 2) - padding, fontSize,
            RAYWHITE);
 }
